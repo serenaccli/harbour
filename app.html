@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Harbour | Live App</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Spectral:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/maplibre-gl@5.18.0/dist/maplibre-gl.css"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body class="app-body">
+    <div class="page-shell">
+      <div class="noise"></div>
+      <main class="app-card">
+        <header class="site-header">
+          <div class="brand">
+            <span class="brand-mark">⚓</span>
+            <div>
+              <p class="eyebrow">Live marine control surface</p>
+              <h1>Harbour</h1>
+            </div>
+          </div>
+          <nav class="site-nav">
+            <a href="./index.html">Intro</a>
+            <a href="#map-section">Map</a>
+            <a href="#inputs">Inputs</a>
+          </nav>
+        </header>
+
+        <section class="app-hero-strip">
+          <div class="hero-panel">
+            <div class="hero-panel-top">
+              <span class="eyebrow">Current engine status</span>
+              <strong id="missionBand">SYNCING</strong>
+            </div>
+            <p id="missionSummary">Pulling live marine conditions for the current departure area.</p>
+            <div class="global-badge">
+              <span>Global mode</span>
+              <strong id="coordinateReadout">Locating...</strong>
+            </div>
+          </div>
+          <div class="app-hero-note">
+            <p class="feature-kicker">Live area intelligence</p>
+            <h2>Scan any coastline, then decide.</h2>
+            <p>Harbour is designed for ports, offshore zones, and fishing grounds worldwide. Advanced inputs are available below when you want to tune the recommendation.</p>
+          </div>
+        </section>
+
+        <section class="map-section" id="map-section">
+          <div class="map-header">
+            <div>
+              <p class="feature-kicker">Global marine risk map</p>
+              <h2>Regional sector scan</h2>
+              <p class="section-copy">Each sector is colored from live marine samples so coastal areas around the world read at a glance.</p>
+            </div>
+            <div class="map-actions">
+              <button class="ghost-button" id="useLocationBtn" type="button">Use my location</button>
+              <button class="secondary-button" id="refreshBtn" type="button">Refresh scan</button>
+            </div>
+          </div>
+
+          <div class="map-layout">
+            <section class="panel map-panel">
+              <div class="compact-controls">
+                <label for="locationInput">Departure area</label>
+                <div class="search-row">
+                  <input id="locationInput" type="text" placeholder="Try Cape Town, Auckland, Bergen, or 37.06,-149.90" value="Eden, NSW" />
+                  <button class="secondary-button" id="searchBtn" type="button">Scan area</button>
+                </div>
+              </div>
+
+              <div id="statusBanner" class="status-banner">Waiting for live data.</div>
+
+              <div id="map" class="marine-map"></div>
+            </section>
+
+            <aside class="panel decision-panel" id="decisionPanel">
+              <p class="panel-label">Departure recommendation</p>
+              <div class="score-ring" id="scoreRing">
+                <div class="score-ring-inner">
+                  <span class="score-number" id="scoreNumber">--</span>
+                  <span class="score-unit" id="scoreLabel">loading</span>
+                </div>
+              </div>
+              <p class="panel-note" id="recommendationText">Loading live conditions...</p>
+              <div class="conditions compact">
+                <div>
+                  <span class="metric-label">Weather risk</span>
+                  <strong id="weatherRiskMetric">--</strong>
+                </div>
+                <div>
+                  <span class="metric-label">Fatigue risk</span>
+                  <strong id="fatigueRiskMetric">--</strong>
+                </div>
+                <div>
+                  <span class="metric-label">Break-even</span>
+                  <strong id="breakEvenMetric">--</strong>
+                </div>
+              </div>
+              <div class="decision-actions">
+                <button class="danger-button" id="overrideBtn" type="button">Override red recommendation</button>
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <section class="insight-grid">
+          <article class="panel">
+            <div class="section-heading small">
+              <p class="feature-kicker">Reasoning</p>
+              <h2>Why Harbour made the call</h2>
+            </div>
+            <ul class="reason-list" id="reasonList"></ul>
+          </article>
+
+          <article class="panel">
+            <div class="section-heading small">
+              <p class="feature-kicker">Selected area</p>
+              <h2>Area briefing</h2>
+            </div>
+            <div class="metric-grid" id="selectedAreaMetrics"></div>
+          </article>
+
+          <article class="panel">
+            <div class="section-heading small">
+              <p class="feature-kicker">Trip economics</p>
+              <h2>Break-even pressure</h2>
+            </div>
+            <div class="metric-grid" id="financeMetrics"></div>
+          </article>
+        </section>
+
+        <section class="panel controls-panel" id="inputs">
+          <div class="section-heading small">
+            <p class="feature-kicker">Optional inputs</p>
+            <h2>Tune the recommendation</h2>
+          </div>
+
+          <details class="controls-accordion">
+            <summary>Open trip context controls</summary>
+            <div class="form-grid">
+              <label>
+                <span>Sleep in last 24h</span>
+                <input id="sleep24" type="number" min="0" max="24" step="0.5" value="4.5" />
+              </label>
+              <label>
+                <span>Sleep in last 48h</span>
+                <input id="sleep48" type="number" min="0" max="48" step="0.5" value="9" />
+              </label>
+              <label>
+                <span>Days at sea this week</span>
+                <input id="daysAtSea" type="number" min="0" max="14" step="1" value="5" />
+              </label>
+              <label>
+                <span>Crewed overnight?</span>
+                <select id="overnightSelect">
+                  <option value="no">No</option>
+                  <option value="yes" selected>Yes</option>
+                </select>
+              </label>
+              <label>
+                <span>Diesel price ($/L)</span>
+                <input id="dieselPrice" type="number" min="0" step="0.01" value="2.18" />
+              </label>
+              <label>
+                <span>Fuel burn (L/hr)</span>
+                <input id="fuelBurn" type="number" min="0" step="0.5" value="18" />
+              </label>
+              <label>
+                <span>Trip hours</span>
+                <input id="tripHours" type="number" min="1" step="0.5" value="8" />
+              </label>
+              <label>
+                <span>Sale price ($/kg)</span>
+                <input id="salePrice" type="number" min="0.1" step="0.1" value="7.5" />
+              </label>
+              <label>
+                <span>Other trip costs ($)</span>
+                <input id="otherCosts" type="number" min="0" step="10" value="180" />
+              </label>
+              <label>
+                <span>Planned catch (kg)</span>
+                <input id="plannedCatch" type="number" min="0" step="1" value="55" />
+              </label>
+            </div>
+
+            <div class="control-group">
+              <label for="contactsInput">Emergency contacts</label>
+              <textarea
+                id="contactsInput"
+                rows="4"
+                placeholder="One contact per line"
+              >Skipper partner - +61 400 111 222
+Deckhand brother - +61 400 333 444
+Harbour office - VHF channel 16</textarea>
+            </div>
+          </details>
+        </section>
+
+        <section class="panel alerts-panel">
+          <div class="section-heading small">
+            <p class="feature-kicker">Safeguard</p>
+            <h2>Override and emergency contacts</h2>
+          </div>
+          <div class="alert-state" id="alertState">No override triggered.</div>
+          <div class="alert-log" id="alertLog"></div>
+        </section>
+      </main>
+    </div>
+
+    <script src="https://unpkg.com/maplibre-gl@5.18.0/dist/maplibre-gl.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>
