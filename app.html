@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Spectral:wght@500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Merriweather:wght@400;700&display=swap"
       rel="stylesheet"
     />
     <link
@@ -18,11 +18,22 @@
   </head>
   <body class="app-body">
     <div class="page-shell">
+      <div class="app-ocean-backdrop">
+        <div
+          class="rb-aurora-layer rb-aurora-layer-app"
+          data-rb-aurora
+          data-color-stops="#0c5ce7,#8c6dff,#66c7ff"
+          data-speed="2.4"
+          data-blend="0.5"
+          data-amplitude="1.15"
+        ></div>
+        <div class="rb-aurora-vignette rb-aurora-vignette-app"></div>
+      </div>
       <div class="noise"></div>
       <main class="app-card">
         <header class="site-header">
           <div class="brand">
-            <span class="brand-mark">⚓</span>
+            <span class="brand-mark" aria-hidden="true"></span>
             <div>
               <p class="eyebrow">Live marine control surface</p>
               <h1>Harbour</h1>
@@ -41,16 +52,16 @@
               <span class="eyebrow">Current engine status</span>
               <strong id="missionBand">SYNCING</strong>
             </div>
-            <p id="missionSummary">Pulling live marine conditions for the current departure area.</p>
+            <p id="missionSummary">Pulling live marine conditions for the current selected patch.</p>
             <div class="global-badge">
-              <span>Global mode</span>
+              <span>Patch center</span>
               <strong id="coordinateReadout">Locating...</strong>
             </div>
           </div>
           <div class="app-hero-note">
             <p class="feature-kicker">Live area intelligence</p>
-            <h2>Scan any coastline, then decide.</h2>
-            <p>Harbour is designed for ports, offshore zones, and fishing grounds worldwide. Advanced inputs are available below when you want to tune the recommendation.</p>
+            <h2>Drop a pin. Read the patch. Make the call.</h2>
+            <p>Search a departure point, then drag the marker into open water or click anywhere on the map. Harbour builds a circular risk patch around that spot and scores the conditions in real time.</p>
           </div>
         </section>
 
@@ -58,12 +69,12 @@
           <div class="map-header">
             <div>
               <p class="feature-kicker">Global marine risk map</p>
-              <h2>Regional sector scan</h2>
-              <p class="section-copy">Each sector is colored from live marine samples so coastal areas around the world read at a glance.</p>
+              <h2>Draggable patch scan</h2>
+              <p class="section-copy">Move the pin anywhere on the water and Harbour paints one clear circular zone: green for manageable water, amber for caution, red for hazardous conditions.</p>
             </div>
             <div class="map-actions">
               <button class="ghost-button" id="useLocationBtn" type="button">Use my location</button>
-              <button class="secondary-button" id="refreshBtn" type="button">Refresh scan</button>
+              <button class="secondary-button" id="refreshBtn" type="button">Refresh patch</button>
             </div>
           </div>
 
@@ -73,7 +84,7 @@
                 <label for="locationInput">Departure area</label>
                 <div class="search-row">
                   <input id="locationInput" type="text" placeholder="Try Cape Town, Auckland, Bergen, or 37.06,-149.90" value="Eden, NSW" />
-                  <button class="secondary-button" id="searchBtn" type="button">Scan area</button>
+                  <button class="secondary-button" id="searchBtn" type="button">Set departure</button>
                 </div>
               </div>
 
@@ -167,20 +178,30 @@
                 </select>
               </label>
               <label>
-                <span>Diesel price ($/L)</span>
-                <input id="dieselPrice" type="number" min="0" step="0.01" value="2.18" />
+                <span>Target species</span>
+                <select id="fishSpecies">
+                  <option value="tuna" selected>Tuna</option>
+                  <option value="snapper">Snapper</option>
+                  <option value="lobster">Lobster</option>
+                  <option value="squid">Squid</option>
+                  <option value="mackerel">Mackerel</option>
+                </select>
+              </label>
+              <label>
+                <span>Departure diesel benchmark ($/L)</span>
+                <input id="dieselPrice" type="number" min="0" step="0.01" value="2.18" readonly />
               </label>
               <label>
                 <span>Fuel burn (L/hr)</span>
                 <input id="fuelBurn" type="number" min="0" step="0.5" value="18" />
               </label>
               <label>
-                <span>Trip hours</span>
-                <input id="tripHours" type="number" min="1" step="0.5" value="8" />
+                <span>Cruising speed (km/h)</span>
+                <input id="cruiseSpeed" type="number" min="1" step="1" value="24" />
               </label>
               <label>
-                <span>Sale price ($/kg)</span>
-                <input id="salePrice" type="number" min="0.1" step="0.1" value="7.5" />
+                <span>Fishing time on grounds (hrs)</span>
+                <input id="tripHours" type="number" min="1" step="0.5" value="8" />
               </label>
               <label>
                 <span>Other trip costs ($)</span>
@@ -217,6 +238,7 @@ Harbour office - VHF channel 16</textarea>
     </div>
 
     <script src="https://unpkg.com/maplibre-gl@5.18.0/dist/maplibre-gl.js"></script>
-    <script src="./app.js"></script>
+    <script type="module" src="./aurora.js"></script>
+    <script src="./app.js?v=marker-sync-fix"></script>
   </body>
 </html>

@@ -1,5 +1,36 @@
-const DEFAULT_CENTER = { lat: -37.0667, lng: 149.9, label: "Eden, Australia" };
-const GRID_OFFSETS = [-0.45, 0, 0.45];
+const DEFAULT_DEPARTURE = {
+  lat: -37.0667,
+  lng: 149.9,
+  label: "Eden, Australia",
+  country: "Australia",
+  countryCode: "AU",
+  admin1: "New South Wales",
+};
+const PATCH_RADIUS_KM = 54;
+const PATCH_STEPS = 72;
+const DEFAULT_DIESEL_PRICE = 2.05;
+const ROUTE_COLUMNS = 7;
+const ROUTE_ROWS = 5;
+
+const FISH_SPECIES = {
+  tuna: { label: "Tuna", salePrice: 9.8 },
+  snapper: { label: "Snapper", salePrice: 7.9 },
+  lobster: { label: "Lobster", salePrice: 26.5 },
+  squid: { label: "Squid", salePrice: 6.4 },
+  mackerel: { label: "Mackerel", salePrice: 5.6 },
+};
+
+const DIESEL_BY_COUNTRY = {
+  AU: 2.18,
+  NZ: 2.11,
+  GB: 1.86,
+  NO: 2.07,
+  IS: 2.24,
+  ES: 1.71,
+  ZA: 1.39,
+  CA: 1.63,
+  US: 1.28,
+};
 
 const LOCATION_ALIASES = {
   "eden, nsw": "Eden, New South Wales, Australia",
@@ -26,15 +57,18 @@ const LOCATION_ALIASES = {
 };
 
 const appState = {
-  center: { ...DEFAULT_CENTER },
-  samples: [],
-  nearestSample: null,
-  selectedSample: null,
+  departure: { ...DEFAULT_DEPARTURE },
+  target: { ...DEFAULT_DEPARTURE, label: "Selected patch" },
+  targetSample: null,
+  routeSamples: [],
+  routePath: [],
+  greenRoutePath: [],
   recommendation: null,
+  dieselPrice: DIESEL_BY_COUNTRY.AU,
   map: null,
-  centerMarker: null,
-  sampleMarkers: [],
-  sampleSourceLoaded: false,
+  mapLoaded: false,
+  departureMarker: null,
+  targetMarker: null,
 };
 
 const elements = {
@@ -47,10 +81,11 @@ const elements = {
   sleep48: document.getElementById("sleep48"),
   daysAtSea: document.getElementById("daysAtSea"),
   overnightSelect: document.getElementById("overnightSelect"),
+  fishSpecies: document.getElementById("fishSpecies"),
   dieselPrice: document.getElementById("dieselPrice"),
   fuelBurn: document.getElementById("fuelBurn"),
+  cruiseSpeed: document.getElementById("cruiseSpeed"),
   tripHours: document.getElementById("tripHours"),
-  salePrice: document.getElementById("salePrice"),
   otherCosts: document.getElementById("otherCosts"),
   plannedCatch: document.getElementById("plannedCatch"),
   contactsInput: document.getElementById("contactsInput"),
@@ -196,49 +231,14 @@ function formatGeocodeLabel(result) {
   return detail ? `${result.name}, ${detail}` : result.name;
 }
 
-function parseInputs() {
-  return {
-    sleep24: Number(elements.sleep24.value) || 0,
-    sleep48: Number(elements.sleep48.value) || 0,
-    daysAtSea: Number(elements.daysAtSea.value) || 0,
-    overnight: elements.overnightSelect.value === "yes",
-    dieselPrice: Number(elements.dieselPrice.value) || 0,
-    fuelBurn: Number(elements.fuelBurn.value) || 0,
-    tripHours: Number(elements.tripHours.value) || 0,
-    salePrice: Number(elements.salePrice.value) || 0,
-    otherCosts: Number(elements.otherCosts.value) || 0,
-    plannedCatch: Number(elements.plannedCatch.value) || 0,
-  };
+function getDieselPriceForDeparture(departure) {
+  const code = (departure.countryCode || "").toUpperCase();
+  const fallbackCode = code === "UK" ? "GB" : code;
+  return DIESEL_BY_COUNTRY[fallbackCode] || DEFAULT_DIESEL_PRICE;
 }
 
-function buildGrid(center) {
-  const labels = [
-    "Northwest sector",
-    "North sector",
-    "Northeast sector",
-    "West sector",
-    "Departure point",
-    "East sector",
-    "Southwest sector",
-    "South sector",
-    "Southeast sector",
-  ];
-
-  const points = [];
-  let labelIndex = 0;
-
-  for (const latOffset of GRID_OFFSETS) {
-    for (const lngOffset of GRID_OFFSETS) {
-      points.push({
-        lat: center.lat + latOffset,
-        lng: center.lng + lngOffset,
-        label: labels[labelIndex],
-      });
-      labelIndex += 1;
-    }
-  }
-
-  return points;
+function syncDieselInput() {
+  elements.dieselPrice.value = appState.dieselPrice.toFixed(2);
 }
 
 async function geocodePlace(query) {
@@ -263,6 +263,9 @@ async function geocodePlace(query) {
         lat: result.latitude,
         lng: result.longitude,
         label: formatGeocodeLabel(result),
+        country: result.country || "",
+        countryCode: result.country_code || "",
+        admin1: result.admin1 || "",
       };
     }
   }
@@ -270,10 +273,33 @@ async function geocodePlace(query) {
   throw new Error("No matching location found. Try a city, port, coastline, or coordinates.");
 }
 
-async function fetchMarineSamples(center) {
-  const grid = buildGrid(center);
-  const latitudes = grid.map((point) => point.lat.toFixed(4)).join(",");
-  const longitudes = grid.map((point) => point.lng.toFixed(4)).join(",");
+function parseInputs() {
+  const fishKey = elements.fishSpecies.value;
+  const fish = FISH_SPECIES[fishKey] || FISH_SPECIES.tuna;
+  return {
+    sleep24: Number(elements.sleep24.value) || 0,
+    sleep48: Number(elements.sleep48.value) || 0,
+    daysAtSea: Number(elements.daysAtSea.value) || 0,
+    overnight: elements.overnightSelect.value === "yes",
+    fishKey,
+    fishLabel: fish.label,
+    salePrice: fish.salePrice,
+    dieselPrice: appState.dieselPrice,
+    fuelBurn: Number(elements.fuelBurn.value) || 0,
+    cruiseSpeed: Number(elements.cruiseSpeed.value) || 0,
+    tripHours: Number(elements.tripHours.value) || 0,
+    otherCosts: Number(elements.otherCosts.value) || 0,
+    plannedCatch: Number(elements.plannedCatch.value) || 0,
+  };
+}
+
+async function fetchMarineSamplesForPoints(points) {
+  if (!points.length) {
+    return [];
+  }
+
+  const latitudes = points.map((point) => point.lat.toFixed(4)).join(",");
+  const longitudes = points.map((point) => point.lng.toFixed(4)).join(",");
 
   const weatherUrl =
     `https://api.open-meteo.com/v1/forecast?latitude=${latitudes}&longitude=${longitudes}` +
@@ -284,7 +310,7 @@ async function fetchMarineSamples(center) {
 
   const [weatherResponse, marineResponse] = await Promise.all([fetch(weatherUrl), fetch(marineUrl)]);
   if (!weatherResponse.ok || !marineResponse.ok) {
-    throw new Error("Live marine sync failed.");
+    throw new Error("Live route sampling failed.");
   }
 
   const weatherData = await weatherResponse.json();
@@ -292,7 +318,7 @@ async function fetchMarineSamples(center) {
   const weatherBlocks = Array.isArray(weatherData) ? weatherData : [weatherData];
   const marineBlocks = Array.isArray(marineData) ? marineData : [marineData];
 
-  return grid.map((point, index) => {
+  return points.map((point, index) => {
     const weather = weatherBlocks[index]?.current || {};
     const marine = marineBlocks[index]?.current || {};
     const weatherScore = scoreWeather({
@@ -310,12 +336,48 @@ async function fetchMarineSamples(center) {
       windSpeed: weather.wind_speed_10m,
       gusts: weather.wind_gusts_10m,
       pressure: weather.pressure_msl,
-      seaTemperature: marine.sea_surface_temperature,
-      swellDirection: marine.swell_wave_direction,
       weatherScore,
       band: getRiskBand(weatherScore),
     };
   });
+}
+
+async function fetchMarineSample(point) {
+  const weatherUrl =
+    `https://api.open-meteo.com/v1/forecast?latitude=${point.lat.toFixed(4)}&longitude=${point.lng.toFixed(4)}` +
+    "&current=wind_speed_10m,wind_gusts_10m,pressure_msl&timezone=auto";
+  const marineUrl =
+    `https://marine-api.open-meteo.com/v1/marine?latitude=${point.lat.toFixed(4)}&longitude=${point.lng.toFixed(4)}` +
+    "&current=wave_height,swell_wave_height,swell_wave_direction,sea_surface_temperature&timezone=auto";
+
+  const [weatherResponse, marineResponse] = await Promise.all([fetch(weatherUrl), fetch(marineUrl)]);
+  if (!weatherResponse.ok || !marineResponse.ok) {
+    throw new Error("Live marine sync failed.");
+  }
+
+  const weather = (await weatherResponse.json()).current || {};
+  const marine = (await marineResponse.json()).current || {};
+  const weatherScore = scoreWeather({
+    waveHeight: marine.wave_height,
+    swellHeight: marine.swell_wave_height,
+    windSpeed: weather.wind_speed_10m,
+    gusts: weather.wind_gusts_10m,
+    pressure: weather.pressure_msl,
+  });
+
+  return {
+    ...point,
+    label: point.label || "Selected patch",
+    waveHeight: marine.wave_height,
+    swellHeight: marine.swell_wave_height,
+    windSpeed: weather.wind_speed_10m,
+    gusts: weather.wind_gusts_10m,
+    pressure: weather.pressure_msl,
+    seaTemperature: marine.sea_surface_temperature,
+    swellDirection: marine.swell_wave_direction,
+    weatherScore,
+    band: getRiskBand(weatherScore),
+  };
 }
 
 function scoreWeather({ waveHeight, swellHeight, windSpeed, gusts, pressure }) {
@@ -330,6 +392,7 @@ function scoreWeather({ waveHeight, swellHeight, windSpeed, gusts, pressure }) {
   return Math.max(0, Math.min(100, Math.round(score)));
 }
 
+
 function scoreFatigue(inputs) {
   let score = 0;
   score += Math.max(0, 8 - inputs.sleep24) * 8;
@@ -341,8 +404,13 @@ function scoreFatigue(inputs) {
   return Math.max(0, Math.min(100, Math.round(score)));
 }
 
-function scoreFinance(inputs) {
-  const fuelCost = inputs.dieselPrice * inputs.fuelBurn * inputs.tripHours;
+function scoreFinance(inputs, departure, sample) {
+  const distanceToPatchKm = departure && sample ? haversineKm(departure, sample) : 0;
+  const roundTripKm = distanceToPatchKm * 2;
+  const travelHours = inputs.cruiseSpeed > 0 ? roundTripKm / inputs.cruiseSpeed : 0;
+  const totalTripHours = travelHours + inputs.tripHours;
+  const fuelUsedLitres = inputs.fuelBurn * totalTripHours;
+  const fuelCost = inputs.dieselPrice * fuelUsedLitres;
   const tripCost = fuelCost + inputs.otherCosts;
   const breakEvenKg = inputs.salePrice > 0 ? tripCost / inputs.salePrice : Infinity;
   const pressureRatio = inputs.plannedCatch > 0 ? breakEvenKg / inputs.plannedCatch : 1.5;
@@ -350,21 +418,20 @@ function scoreFinance(inputs) {
   score += Math.max(0, pressureRatio - 0.55) * 90;
 
   return {
+    fishLabel: inputs.fishLabel,
+    fishSalePrice: inputs.salePrice,
+    dieselPrice: inputs.dieselPrice,
+    distanceToPatchKm,
+    roundTripKm,
+    travelHours,
+    totalTripHours,
+    fuelUsedLitres,
     fuelCost,
     tripCost,
     breakEvenKg,
     pressureRatio,
     financeScore: Math.max(0, Math.min(100, Math.round(score))),
   };
-}
-
-function chooseNearestSample() {
-  const center = appState.center;
-  return appState.samples.reduce((best, sample) => {
-    const bestDistance = best ? Math.hypot(best.lat - center.lat, best.lng - center.lng) : Infinity;
-    const nextDistance = Math.hypot(sample.lat - center.lat, sample.lng - center.lng);
-    return nextDistance < bestDistance ? sample : best;
-  }, null);
 }
 
 function toRadians(value) {
@@ -394,46 +461,290 @@ function bearingLabel(degrees) {
   return dirs[Math.round((((degrees % 360) + 360) % 360) / 45) % 8];
 }
 
-function patchBounds(sample, halfStep = 0.24) {
-  return [
-    [sample.lng - halfStep, sample.lat - halfStep],
-    [sample.lng + halfStep, sample.lat - halfStep],
-    [sample.lng + halfStep, sample.lat + halfStep],
-    [sample.lng - halfStep, sample.lat + halfStep],
-    [sample.lng - halfStep, sample.lat - halfStep],
-  ];
+function interpolatePoint(from, to, t) {
+  return {
+    lat: from.lat + (to.lat - from.lat) * t,
+    lng: from.lng + (to.lng - from.lng) * t,
+  };
+}
+
+function routeBandPenalty(band) {
+  if (band === "red") {
+    return 8;
+  }
+  if (band === "amber") {
+    return 2.6;
+  }
+  return 1;
+}
+
+function buildRouteGrid(departure, target) {
+  const directDistanceKm = Math.max(haversineKm(departure, target), 1);
+  const corridorWidthKm = Math.max(18, Math.min(60, directDistanceKm * 0.22));
+  const latPerKm = 1 / 111.32;
+  const avgLatRadians = toRadians((departure.lat + target.lat) / 2);
+  const lngPerKm = 1 / (111.32 * Math.max(Math.cos(avgLatRadians), 0.15));
+  const dx = target.lng - departure.lng;
+  const dy = target.lat - departure.lat;
+  const length = Math.hypot(dx, dy) || 1;
+  const perpLat = dx / length;
+  const perpLng = -dy / length;
+  const lateralOffsets = Array.from({ length: ROUTE_ROWS }, (_, index) => index - Math.floor(ROUTE_ROWS / 2));
+
+  const points = [];
+  for (let column = 0; column < ROUTE_COLUMNS; column += 1) {
+    const t = column / (ROUTE_COLUMNS - 1);
+    const base = interpolatePoint(departure, target, t);
+
+    lateralOffsets.forEach((offset, row) => {
+      const offsetKm = (offset / Math.max(1, Math.floor(ROUTE_ROWS / 2))) * corridorWidthKm;
+      const lat = base.lat + perpLat * offsetKm * latPerKm;
+      const lng = base.lng + perpLng * offsetKm * lngPerKm;
+      const isDeparture = column === 0 && row === Math.floor(ROUTE_ROWS / 2);
+      const isTarget = column === ROUTE_COLUMNS - 1 && row === Math.floor(ROUTE_ROWS / 2);
+
+      points.push({
+        id: `${column}-${row}`,
+        column,
+        row,
+        lat: isDeparture ? departure.lat : isTarget ? target.lat : lat,
+        lng: isDeparture ? departure.lng : isTarget ? target.lng : lng,
+        label: isDeparture ? "Departure route node" : isTarget ? "Destination route node" : `Route node ${column + 1}-${row + 1}`,
+        locked: isDeparture || isTarget,
+      });
+    });
+  }
+
+  return points;
+}
+
+function buildRouteGeoJson(path) {
+  if (!path.length) {
+    return { type: "FeatureCollection", features: [] };
+  }
+
+  return {
+    type: "FeatureCollection",
+    features: [
+      {
+        type: "Feature",
+        geometry: {
+          type: "LineString",
+          coordinates: path.map((point) => [point.lng, point.lat]),
+        },
+        properties: {},
+      },
+    ],
+  };
+}
+
+function buildRouteSegmentsGeoJson(path) {
+  if (path.length < 2) {
+    return { type: "FeatureCollection", features: [] };
+  }
+
+  return {
+    type: "FeatureCollection",
+    features: path.slice(1).map((point, index) => ({
+      type: "Feature",
+      geometry: {
+        type: "LineString",
+        coordinates: [
+          [path[index].lng, path[index].lat],
+          [point.lng, point.lat],
+        ],
+      },
+      properties: {
+        band: point.band || "green",
+      },
+    })),
+  };
+}
+
+function buildRouteNodesGeoJson(points) {
+  return {
+    type: "FeatureCollection",
+    features: points.map((point) => ({
+      type: "Feature",
+      geometry: {
+        type: "Point",
+        coordinates: [point.lng, point.lat],
+      },
+      properties: {
+        band: point.band || "green",
+        locked: point.locked ? "yes" : "no",
+      },
+    })),
+  };
+}
+
+function computeRoutePath(points, options = {}) {
+  if (!points.length) {
+    return [];
+  }
+
+  const {
+    allowNeighbor = () => true,
+    edgeWeight = (current, neighbor) => haversineKm(current, neighbor) * routeBandPenalty(neighbor.band),
+  } = options;
+
+  const pointMap = new Map(points.map((point) => [point.id, point]));
+  const neighbors = new Map();
+
+  for (const point of points) {
+    const nextIds = [];
+    const nextColumn = point.column + 1;
+    if (nextColumn < ROUTE_COLUMNS) {
+      for (let rowOffset = -1; rowOffset <= 1; rowOffset += 1) {
+        const neighborId = `${nextColumn}-${point.row + rowOffset}`;
+        if (pointMap.has(neighborId)) {
+          nextIds.push(neighborId);
+        }
+      }
+    }
+    neighbors.set(point.id, nextIds);
+  }
+
+  const startId = `0-${Math.floor(ROUTE_ROWS / 2)}`;
+  const endId = `${ROUTE_COLUMNS - 1}-${Math.floor(ROUTE_ROWS / 2)}`;
+  const distances = new Map(points.map((point) => [point.id, Infinity]));
+  const previous = new Map();
+  const visited = new Set();
+  distances.set(startId, 0);
+
+  while (visited.size < points.length) {
+    let currentId = null;
+    let currentDistance = Infinity;
+
+    for (const [id, distance] of distances.entries()) {
+      if (!visited.has(id) && distance < currentDistance) {
+        currentDistance = distance;
+        currentId = id;
+      }
+    }
+
+    if (!currentId || currentId === endId) {
+      break;
+    }
+
+    visited.add(currentId);
+    const current = pointMap.get(currentId);
+
+    for (const neighborId of neighbors.get(currentId) || []) {
+      const neighbor = pointMap.get(neighborId);
+      if (!allowNeighbor(current, neighbor)) {
+        continue;
+      }
+      const candidateDistance = currentDistance + edgeWeight(current, neighbor);
+      if (candidateDistance < distances.get(neighborId)) {
+        distances.set(neighborId, candidateDistance);
+        previous.set(neighborId, currentId);
+      }
+    }
+  }
+
+  if (!previous.has(endId) && startId !== endId) {
+    return [];
+  }
+
+  const path = [];
+  let currentId = endId;
+  while (currentId) {
+    path.unshift(pointMap.get(currentId));
+    currentId = previous.get(currentId);
+  }
+
+  return path;
+}
+
+function computeGreenRoutePath(points) {
+  return computeRoutePath(points, {
+    allowNeighbor: (current, neighbor) => {
+      if (current.locked || neighbor.locked) {
+        return true;
+      }
+      return current.band === "green" && neighbor.band === "green";
+    },
+    edgeWeight: (current, neighbor) => haversineKm(current, neighbor),
+  });
+}
+
+function circleCoordinates(center, radiusKm = PATCH_RADIUS_KM, steps = PATCH_STEPS) {
+  const earthRadiusKm = 6371;
+  const latRadians = toRadians(center.lat);
+  const latPerKm = 1 / 111.32;
+  const lngPerKm = 1 / (111.32 * Math.max(Math.cos(latRadians), 0.15));
+  const points = [];
+
+  for (let step = 0; step <= steps; step += 1) {
+    const angle = (step / steps) * Math.PI * 2;
+    const deltaLat = Math.sin(angle) * radiusKm * latPerKm;
+    const deltaLng = Math.cos(angle) * radiusKm * lngPerKm;
+    points.push([center.lng + deltaLng, center.lat + deltaLat]);
+  }
+
+  return points;
+}
+
+function buildPatchGeoJson(sample) {
+  if (!sample) {
+    return { type: "FeatureCollection", features: [] };
+  }
+
+  return {
+    type: "FeatureCollection",
+    features: [
+      {
+        type: "Feature",
+        geometry: {
+          type: "Polygon",
+          coordinates: [circleCoordinates(sample)],
+        },
+        properties: {
+          label: sample.label,
+          band: sample.band,
+          score: sample.weatherScore,
+          waveHeight: formatNumber(sample.waveHeight),
+          windSpeed: formatNumber(sample.windSpeed),
+          pressure: formatNumber(sample.pressure, 0),
+          lat: sample.lat,
+          lng: sample.lng,
+        },
+      },
+    ],
+  };
 }
 
 function buildReasons(weatherScore, fatigueScore, finance) {
   const reasons = [];
-  const sample = appState.selectedSample || appState.nearestSample;
+  const sample = appState.targetSample;
 
   if (sample) {
     reasons.push(
-      `Nearest marker shows ${formatNumber(sample.waveHeight)}m waves, ${formatNumber(sample.windSpeed)} km/h wind, and ${formatNumber(sample.pressure, 0)} hPa pressure.`
+      `The selected patch is reading ${formatNumber(sample.waveHeight)}m waves, ${formatNumber(sample.windSpeed)} km/h wind, and ${formatNumber(sample.pressure, 0)} hPa pressure.`
     );
   }
 
   if (fatigueScore >= 70) {
-    reasons.push("Crew fatigue is severe enough to push the recommendation toward a no-go even if some nearby markers look manageable.");
+    reasons.push("Crew fatigue is severe enough to push the recommendation toward a no-go even if the water itself looks workable.");
   } else if (fatigueScore >= 40) {
-    reasons.push("Fatigue is elevated, so even moderate conditions should be treated with caution.");
+    reasons.push("Fatigue is elevated, so this area should be treated with caution even if conditions are only moderate.");
   } else {
-    reasons.push("Fatigue inputs are still within a more manageable range.");
+    reasons.push("Crew fatigue inputs are still within a more manageable range.");
   }
 
   reasons.push(
-    `Break-even sits at ${formatNumber(finance.breakEvenKg, 0)}kg against a planned ${formatNumber(parseInputs().plannedCatch, 0)}kg trip, which ${
-      finance.pressureRatio > 1 ? "adds strong economic pressure" : "keeps financial pressure moderate"
+    `With ${finance.fishLabel.toLowerCase()} at $${formatNumber(finance.fishSalePrice, 2)}/kg and a ${formatNumber(finance.roundTripKm, 0)} km round trip from departure, break-even sits at ${formatNumber(finance.breakEvenKg, 0)}kg against a planned ${formatNumber(parseInputs().plannedCatch, 0)}kg trip, which ${
+      finance.pressureRatio > 1 ? "adds strong economic pressure to launch" : "keeps financial pressure moderate"
     }.`
   );
 
   if (weatherScore >= 70) {
-    reasons.push("Nearby sampled positions include red-risk water, so Harbour recommends staying in.");
+    reasons.push("This water patch is scoring as hazardous, so Harbour recommends staying in or moving the pin to a safer pocket.");
   } else if (weatherScore >= 40) {
-    reasons.push("Conditions are mixed around the area, with amber pockets that justify caution.");
+    reasons.push("This patch is mixed and caution-rated, so Harbour suggests a shorter trip or a better nearby area.");
   } else {
-    reasons.push("Most nearby sampled positions remain green, with no dominant severe-weather pocket in the immediate area.");
+    reasons.push("This patch is reading as manageable right now, with no dominant hazard signal in the selected area.");
   }
 
   return reasons;
@@ -442,17 +753,16 @@ function buildReasons(weatherScore, fatigueScore, finance) {
 function buildRecommendation() {
   const inputs = parseInputs();
   const fatigueScore = scoreFatigue(inputs);
-  const finance = scoreFinance(inputs);
-  const weatherScore = appState.nearestSample ? appState.nearestSample.weatherScore : 0;
+  const finance = scoreFinance(inputs, appState.departure, appState.targetSample);
+  const weatherScore = appState.targetSample ? appState.targetSample.weatherScore : 0;
   const overallScore = Math.round(weatherScore * 0.48 + fatigueScore * 0.37 + finance.financeScore * 0.15);
   const band = getRiskBand(overallScore);
-  const reasons = buildReasons(weatherScore, fatigueScore, finance);
 
-  let message = "Conditions look manageable for departure.";
+  let message = "Conditions look manageable for the selected patch.";
   if (band === "red") {
-    message = "No-go. Live area conditions and crew readiness combine into an unsafe departure profile.";
+    message = "No-go. The selected patch and the crew profile combine into an unsafe departure.";
   } else if (band === "amber") {
-    message = "Proceed with caution. There is enough risk to justify delaying departure or shortening the trip.";
+    message = "Proceed with caution. This patch is workable only if the crew and economics still justify the trip.";
   }
 
   appState.recommendation = {
@@ -461,21 +771,29 @@ function buildRecommendation() {
     fatigueScore,
     weatherScore,
     finance,
-    reasons,
+    reasons: buildReasons(weatherScore, fatigueScore, finance),
     message,
   };
 
   renderRecommendation();
 }
 
+function metricCard(label, value) {
+  return `<div class="metric-card"><span>${label}</span><strong>${value}</strong></div>`;
+}
+
 function renderRecommendation() {
   const data = appState.recommendation;
-  if (!data) {
+  const sample = appState.targetSample;
+  if (!data || !sample) {
     return;
   }
 
   const band = data.band;
   const ringAngle = `${Math.max(18, Math.round((data.overallScore / 100) * 360))}deg`;
+  const distanceKm = haversineKm(appState.departure, sample);
+  const bearing = bearingDegrees(appState.departure, sample);
+
   elements.scoreRing.style.setProperty("--ring-angle", ringAngle);
   elements.scoreRing.style.setProperty("--ring-color", bandColor(band));
   elements.scoreNumber.textContent = String(data.overallScore);
@@ -485,23 +803,33 @@ function renderRecommendation() {
   elements.fatigueRiskMetric.textContent = `${data.fatigueScore}/100`;
   elements.breakEvenMetric.textContent = `${formatNumber(data.finance.breakEvenKg, 0)}kg`;
   elements.recommendationText.textContent = data.message;
-  setMissionState(getBandLabel(band).toUpperCase(), data.message, bandColor(band));
-  elements.coordinateReadout.textContent = formatLatLng(appState.center.lat, appState.center.lng);
+  elements.coordinateReadout.textContent = formatLatLng(sample.lat, sample.lng);
   elements.reasonList.innerHTML = data.reasons.map((reason) => `<li>${reason}</li>`).join("");
+  setMissionState(
+    getBandLabel(band).toUpperCase(),
+    `${data.message} Drag the pin to compare another patch of water.`,
+    bandColor(band)
+  );
 
-  const sample = appState.selectedSample || appState.nearestSample;
-  const distanceKm = sample ? haversineKm(appState.center, sample) : 0;
-  const bearing = sample ? bearingDegrees(appState.center, sample) : 0;
   elements.selectedAreaMetrics.innerHTML = [
-    metricCard("Area", sample?.label || "--"),
+    metricCard("Patch center", sample.label),
+    metricCard("Patch radius", `${PATCH_RADIUS_KM} km`),
     metricCard("Travel distance", `${formatNumber(distanceKm, 1)} km`),
+    metricCard("Safer route hops", `${Math.max(0, appState.routePath.length - 1)}`),
+    metricCard("All-green route", appState.greenRoutePath.length > 1 ? "Available" : "Not available"),
     metricCard("Heading", `${bearingLabel(bearing)} · ${formatNumber(bearing, 0)}°`),
-    metricCard("Wave height", `${formatNumber(sample?.waveHeight)} m`),
-    metricCard("Wind speed", `${formatNumber(sample?.windSpeed)} km/h`),
-    metricCard("Pressure", `${formatNumber(sample?.pressure, 0)} hPa`),
+    metricCard("Wave height", `${formatNumber(sample.waveHeight)} m`),
+    metricCard("Wind speed", `${formatNumber(sample.windSpeed)} km/h`),
+    metricCard("Pressure", `${formatNumber(sample.pressure, 0)} hPa`),
+    metricCard("Coordinates", formatLatLng(sample.lat, sample.lng)),
   ].join("");
 
   elements.financeMetrics.innerHTML = [
+    metricCard("Target species", `${data.finance.fishLabel} · $${formatNumber(data.finance.fishSalePrice, 2)}/kg`),
+    metricCard("Departure diesel", `$${formatNumber(data.finance.dieselPrice, 2)}/L`),
+    metricCard("Round-trip distance", `${formatNumber(data.finance.roundTripKm, 0)} km`),
+    metricCard("Travel time", `${formatNumber(data.finance.travelHours, 1)} hrs`),
+    metricCard("Fuel used", `${formatNumber(data.finance.fuelUsedLitres, 0)} L`),
     metricCard("Fuel cost", formatCurrency(data.finance.fuelCost)),
     metricCard("Trip cost", formatCurrency(data.finance.tripCost)),
     metricCard("Break-even catch", `${formatNumber(data.finance.breakEvenKg, 0)} kg`),
@@ -509,37 +837,15 @@ function renderRecommendation() {
   ].join("");
 }
 
-function metricCard(label, value) {
-  return `<div class="metric-card"><span>${label}</span><strong>${value}</strong></div>`;
-}
-
-function createMarkerElement(band, isCenter = false) {
+function createMarkerElement(kind, band = "green") {
   const element = document.createElement("div");
-  element.className = `gps-marker ${isCenter ? "gps-marker-center" : `gps-marker-${band}`}`;
-  return element;
-}
+  if (kind === "departure") {
+    element.className = "gps-marker-departure";
+    return element;
+  }
 
-function buildPatchGeoJson(samples) {
-  return {
-    type: "FeatureCollection",
-    features: samples.map((sample) => ({
-      type: "Feature",
-      geometry: {
-        type: "Polygon",
-        coordinates: [patchBounds(sample)],
-      },
-      properties: {
-        label: sample.label,
-        band: sample.band,
-        score: sample.weatherScore,
-        waveHeight: formatNumber(sample.waveHeight),
-        windSpeed: formatNumber(sample.windSpeed),
-        pressure: formatNumber(sample.pressure, 0),
-        lat: sample.lat,
-        lng: sample.lng,
-      },
-    })),
-  };
+  element.className = `gps-marker-target gps-marker-target-${band}`;
+  return element;
 }
 
 function ensureMap() {
@@ -550,8 +856,8 @@ function ensureMap() {
   appState.map = new maplibregl.Map({
     container: "map",
     style: "https://demotiles.maplibre.org/style.json",
-    center: [appState.center.lng, appState.center.lat],
-    zoom: 7.2,
+    center: [appState.departure.lng, appState.departure.lat],
+    zoom: 6.3,
     attributionControl: true,
   });
 
@@ -559,42 +865,55 @@ function ensureMap() {
   appState.map.addControl(new maplibregl.ScaleControl({ maxWidth: 120, unit: "metric" }), "bottom-right");
 
   appState.map.on("load", () => {
-    appState.map.addSource("risk-patches", {
+    appState.mapLoaded = true;
+
+    appState.map.addSource("risk-area", {
       type: "geojson",
-      data: buildPatchGeoJson([]),
+      data: buildPatchGeoJson(null),
+    });
+
+    appState.map.addSource("route-line", {
+      type: "geojson",
+      data: buildRouteGeoJson([]),
+    });
+
+    appState.map.addSource("route-segments", {
+      type: "geojson",
+      data: buildRouteSegmentsGeoJson([]),
+    });
+
+    appState.map.addSource("green-route-segments", {
+      type: "geojson",
+      data: buildRouteSegmentsGeoJson([]),
+    });
+
+    appState.map.addSource("route-nodes", {
+      type: "geojson",
+      data: buildRouteNodesGeoJson([]),
     });
 
     appState.map.addLayer({
-      id: "risk-patches-fill",
+      id: "risk-area-fill",
       type: "fill",
-      source: "risk-patches",
+      source: "risk-area",
       paint: {
         "fill-color": [
           "match",
           ["get", "band"],
           "red",
-          "rgba(255, 122, 148, 0.40)",
+          "rgba(255, 122, 148, 0.28)",
           "amber",
-          "rgba(255, 200, 107, 0.34)",
-          "rgba(110, 255, 196, 0.30)",
+          "rgba(255, 200, 107, 0.24)",
+          "rgba(110, 255, 196, 0.24)",
         ],
-        "fill-outline-color": [
-          "match",
-          ["get", "band"],
-          "red",
-          "#ff7a94",
-          "amber",
-          "#ffc86b",
-          "#6effc4",
-        ],
-        "fill-opacity": 0.9,
+        "fill-opacity": 0.95,
       },
     });
 
     appState.map.addLayer({
-      id: "risk-patches-outline",
+      id: "risk-area-outline",
       type: "line",
-      source: "risk-patches",
+      source: "risk-area",
       paint: {
         "line-color": [
           "match",
@@ -605,107 +924,246 @@ function ensureMap() {
           "#ffc86b",
           "#6effc4",
         ],
-        "line-width": 2,
-        "line-opacity": 0.85,
+        "line-width": 2.6,
+        "line-opacity": 0.95,
       },
     });
 
-    const onAreaClick = (event) => {
-      const feature = event.features && event.features[0];
-      if (!feature) {
-        return;
-      }
+    appState.map.addLayer({
+      id: "route-line-glow",
+      type: "line",
+      source: "route-segments",
+      paint: {
+        "line-color": [
+          "match",
+          ["get", "band"],
+          "red",
+          "rgba(255, 122, 148, 0.30)",
+          "amber",
+          "rgba(255, 200, 107, 0.28)",
+          "rgba(110, 255, 196, 0.28)",
+        ],
+        "line-width": 14,
+        "line-opacity": 0.92,
+      },
+    });
 
-      appState.selectedSample =
-        appState.samples.find(
-          (sample) =>
-            sample.label === feature.properties.label &&
-            Math.abs(sample.lat - Number(feature.properties.lat)) < 0.0001 &&
-            Math.abs(sample.lng - Number(feature.properties.lng)) < 0.0001
-        ) || appState.nearestSample;
-      buildRecommendation();
+    appState.map.addLayer({
+      id: "route-line-main",
+      type: "line",
+      source: "route-segments",
+      paint: {
+        "line-color": [
+          "match",
+          ["get", "band"],
+          "red",
+          "#ff7a94",
+          "amber",
+          "#ffc86b",
+          "#6effc4",
+        ],
+        "line-width": 5.2,
+        "line-dasharray": [1.1, 0.9],
+        "line-opacity": 0.98,
+      },
+    });
 
-      new maplibregl.Popup({ offset: 14 })
-        .setLngLat(event.lngLat)
-        .setHTML(`
-          <div class="map-popup-card">
-            <strong>${feature.properties.label}</strong>
-            <span>${feature.properties.band.toUpperCase()} · ${feature.properties.score}/100</span>
-            <p>${feature.properties.waveHeight}m wave · ${feature.properties.windSpeed} km/h wind</p>
-            <p>${feature.properties.pressure} hPa pressure</p>
-            <p>Clicking this patch selects it for travel and economics analysis.</p>
-          </div>
-        `)
-        .addTo(appState.map);
-    };
+    appState.map.addLayer({
+      id: "green-route-glow",
+      type: "line",
+      source: "green-route-segments",
+      paint: {
+        "line-color": "rgba(110, 255, 196, 0.26)",
+        "line-width": 16,
+        "line-opacity": 0.95,
+      },
+    });
 
-    appState.map.on("click", "risk-patches-fill", onAreaClick);
+    appState.map.addLayer({
+      id: "green-route-main",
+      type: "line",
+      source: "green-route-segments",
+      paint: {
+        "line-color": "#6effc4",
+        "line-width": 6,
+        "line-dasharray": [0.9, 0.7],
+        "line-opacity": 1,
+      },
+    });
 
-    appState.map.on("mouseenter", "risk-patches-fill", () => {
+    appState.map.addLayer({
+      id: "route-nodes-layer",
+      type: "circle",
+      source: "route-nodes",
+      paint: {
+        "circle-radius": [
+          "case",
+          ["==", ["get", "locked"], "yes"],
+          6.4,
+          5.1,
+        ],
+        "circle-color": [
+          "match",
+          ["get", "band"],
+          "red",
+          "#ff7a94",
+          "amber",
+          "#ffc86b",
+          "#6effc4",
+        ],
+        "circle-stroke-color": "rgba(6, 17, 29, 0.96)",
+        "circle-stroke-width": 1.8,
+        "circle-opacity": 0.98,
+      },
+    });
+
+    appState.map.on("click", (event) => {
+      updateTargetFromMap(event.lngLat.lng, event.lngLat.lat, "Dropped patch");
+    });
+
+    appState.map.on("mouseenter", "risk-area-fill", () => {
       appState.map.getCanvas().style.cursor = "pointer";
     });
 
-    appState.map.on("mouseleave", "risk-patches-fill", () => {
+    appState.map.on("mouseleave", "risk-area-fill", () => {
       appState.map.getCanvas().style.cursor = "";
     });
 
-    appState.sampleSourceLoaded = true;
     renderMap();
   });
 }
 
 function renderMap() {
-  if (!appState.map) {
+  if (!appState.mapLoaded) {
     return;
   }
 
-  if (appState.centerMarker) {
-    appState.centerMarker.remove();
+  if (!appState.departureMarker) {
+    const departureMarker = new maplibregl.Marker({
+      element: createMarkerElement("departure"),
+      anchor: "center",
+    });
+    departureMarker.setLngLat({ lng: appState.departure.lng, lat: appState.departure.lat });
+    departureMarker.setPopup(new maplibregl.Popup({ offset: 18 }));
+    departureMarker.addTo(appState.map);
+    appState.departureMarker = departureMarker;
   }
 
-  appState.centerMarker = new maplibregl.Marker({
-    element: createMarkerElement("green", true),
-    anchor: "bottom",
-  })
-    .setLngLat([appState.center.lng, appState.center.lat])
-    .setPopup(
-      new maplibregl.Popup({ offset: 18 }).setHTML(`
-        <div class="map-popup-card">
-          <strong>${appState.center.label}</strong>
-          <span>${formatLatLng(appState.center.lat, appState.center.lng)}</span>
-          <p>Primary departure marker.</p>
-        </div>
-      `)
-    )
-    .addTo(appState.map);
+  const targetBand = appState.targetSample?.band || "green";
+  if (!appState.targetMarker) {
+    const targetMarker = new maplibregl.Marker({
+      element: createMarkerElement("target", targetBand),
+      anchor: "center",
+      draggable: true,
+    });
+    targetMarker.setLngLat({ lng: appState.target.lng, lat: appState.target.lat });
+    targetMarker.setPopup(new maplibregl.Popup({ offset: 18 }));
+    targetMarker.addTo(appState.map);
+    appState.targetMarker = targetMarker;
 
-  if (appState.sampleSourceLoaded) {
-    const patchSource = appState.map.getSource("risk-patches");
-    if (patchSource) {
-      patchSource.setData(buildPatchGeoJson(appState.samples));
-    }
+    appState.targetMarker.on("dragstart", () => {
+      setStatus("Dragging patch marker. Drop it anywhere on the water to rescan that area.");
+    });
+
+    appState.targetMarker.on("dragend", () => {
+      const lngLat = appState.targetMarker.getLngLat();
+      updateTargetFromMap(lngLat.lng, lngLat.lat, "Dragged patch");
+    });
   }
 
-  appState.map.flyTo({
-    center: [appState.center.lng, appState.center.lat],
-    zoom: 5.6,
-    speed: 0.8,
-    curve: 1.1,
-    essential: true,
-  });
+  appState.departureMarker.setLngLat([appState.departure.lng, appState.departure.lat]);
+  appState.departureMarker.getPopup().setHTML(`
+    <div class="map-popup-card">
+      <strong>${appState.departure.label}</strong>
+      <span>${formatLatLng(appState.departure.lat, appState.departure.lng)}</span>
+      <p>Departure reference point.</p>
+    </div>
+  `);
+
+  appState.targetMarker.setLngLat([appState.target.lng, appState.target.lat]);
+  appState.targetMarker.getPopup().setHTML(`
+    <div class="map-popup-card">
+      <strong>${appState.target.label}</strong>
+      <span>${formatLatLng(appState.target.lat, appState.target.lng)}</span>
+      <p>Drag this pin to test a different patch of water.</p>
+    </div>
+  `);
+  const targetElement = appState.targetMarker.getElement();
+  targetElement.className = `gps-marker-target gps-marker-target-${targetBand}`;
+
+  const riskSource = appState.map.getSource("risk-area");
+  if (riskSource) {
+    riskSource.setData(buildPatchGeoJson(appState.targetSample));
+  }
+
+  const routeLineSource = appState.map.getSource("route-line");
+  if (routeLineSource) {
+    routeLineSource.setData(buildRouteGeoJson(appState.routePath));
+  }
+
+  const routeSegmentsSource = appState.map.getSource("route-segments");
+  if (routeSegmentsSource) {
+    routeSegmentsSource.setData(buildRouteSegmentsGeoJson(appState.routePath));
+  }
+
+  const greenRouteSegmentsSource = appState.map.getSource("green-route-segments");
+  if (greenRouteSegmentsSource) {
+    greenRouteSegmentsSource.setData(buildRouteSegmentsGeoJson(appState.greenRoutePath));
+  }
+
+  const routeNodesSource = appState.map.getSource("route-nodes");
+  if (routeNodesSource) {
+    routeNodesSource.setData(buildRouteNodesGeoJson(appState.routePath));
+  }
 }
 
-async function refreshConditions() {
+async function updateTargetFromMap(lng, lat, label = "Selected patch") {
+  appState.target = {
+    lat,
+    lng,
+    label,
+  };
+  await refreshConditions(true);
+}
+
+async function refreshConditions(keepView = false) {
   try {
-    setStatus(`Syncing live conditions for ${appState.center.label}...`);
-    setMissionState("SYNCING", `Scanning sampled GPS positions around ${appState.center.label}.`);
-    const samples = await fetchMarineSamples(appState.center);
-    appState.samples = samples;
-    appState.nearestSample = chooseNearestSample();
-    appState.selectedSample = appState.nearestSample;
+    setStatus(`Syncing live conditions for ${appState.target.label}...`);
+    setMissionState("SYNCING", `Evaluating a ${PATCH_RADIUS_KM} km circular patch around the current pin.`);
+
+    const [targetSample, routeSamples] = await Promise.all([
+      fetchMarineSample(appState.target),
+      fetchMarineSamplesForPoints(buildRouteGrid(appState.departure, appState.target)),
+    ]);
+
+    appState.targetSample = targetSample;
+    appState.routeSamples = routeSamples;
+    appState.routePath = computeRoutePath(routeSamples);
+    appState.greenRoutePath = computeGreenRoutePath(routeSamples);
+    appState.target = {
+      lat: appState.targetSample.lat,
+      lng: appState.targetSample.lng,
+      label: appState.targetSample.label,
+    };
+
     renderMap();
     buildRecommendation();
-    setStatus(`Live conditions synced for ${appState.center.label}. Real GPS markers reflect nearby marine samples.`, "success");
+
+    const routeMessage = appState.greenRoutePath.length > 1
+      ? "Harbour found both a best-available route and an alternate all-green route."
+      : "Harbour mapped the best available safer connection route, but no fully green corridor was found.";
+
+    setStatus(`Live conditions synced for the selected patch. ${routeMessage}`, "success");
+
+    if (!keepView && appState.mapLoaded) {
+      appState.map.flyTo({
+        center: [appState.target.lng, appState.target.lat],
+        zoom: 6.1,
+        speed: 0.8,
+        curve: 1.1,
+        essential: true,
+      });
+    }
   } catch (error) {
     console.error(error);
     setStatus(error.message || "Unable to sync live data.", "error");
@@ -721,7 +1179,18 @@ async function searchLocation() {
 
   try {
     setStatus(`Finding ${query}...`);
-    appState.center = await geocodePlace(query);
+    const departure = await geocodePlace(query);
+    appState.departure = departure;
+    appState.dieselPrice = getDieselPriceForDeparture(departure);
+    syncDieselInput();
+    appState.routeSamples = [];
+    appState.routePath = [];
+    appState.greenRoutePath = [];
+    appState.target = {
+      lat: departure.lat,
+      lng: departure.lng,
+      label: "Selected patch",
+    };
     await refreshConditions();
   } catch (error) {
     console.error(error);
@@ -739,10 +1208,23 @@ function useCurrentLocation() {
   setStatus("Requesting your location...");
   navigator.geolocation.getCurrentPosition(
     async (position) => {
-      appState.center = {
+      appState.departure = {
         lat: position.coords.latitude,
         lng: position.coords.longitude,
         label: "Current location",
+        country: "",
+        countryCode: "",
+        admin1: "",
+      };
+      appState.dieselPrice = DEFAULT_DIESEL_PRICE;
+      syncDieselInput();
+      appState.routeSamples = [];
+      appState.routePath = [];
+      appState.greenRoutePath = [];
+      appState.target = {
+        lat: position.coords.latitude,
+        lng: position.coords.longitude,
+        label: "Selected patch",
       };
       elements.locationInput.value = `${position.coords.latitude.toFixed(4)}, ${position.coords.longitude.toFixed(4)}`;
       await refreshConditions();
@@ -762,7 +1244,7 @@ function handleOverride() {
   }
 
   if (data.band !== "red") {
-    elements.alertState.textContent = "Override available, but the current recommendation is not red so no alerts were prepared.";
+    elements.alertState.textContent = "Override is available, but the current patch is not red so no alerts were prepared.";
     elements.alertLog.innerHTML = "";
     return;
   }
@@ -782,7 +1264,7 @@ function handleOverride() {
           (contact) => `
             <div class="alert-item">
               <strong>${contact}</strong>
-              <p>${timestamp}: Override triggered for ${appState.center.label}. Departure remained red at ${data.overallScore}/100.</p>
+              <p>${timestamp}: Override triggered for ${appState.target.label}. Selected patch remained red at ${data.overallScore}/100.</p>
             </div>
           `
         )
@@ -793,7 +1275,7 @@ function handleOverride() {
 function wireInputs() {
   elements.searchBtn.addEventListener("click", searchLocation);
   elements.useLocationBtn.addEventListener("click", useCurrentLocation);
-  elements.refreshBtn.addEventListener("click", refreshConditions);
+  elements.refreshBtn.addEventListener("click", () => refreshConditions());
   elements.overrideBtn.addEventListener("click", handleOverride);
 
   elements.locationInput.addEventListener("keydown", (event) => {
@@ -808,10 +1290,10 @@ function wireInputs() {
     elements.sleep48,
     elements.daysAtSea,
     elements.overnightSelect,
-    elements.dieselPrice,
+    elements.fishSpecies,
     elements.fuelBurn,
+    elements.cruiseSpeed,
     elements.tripHours,
-    elements.salePrice,
     elements.otherCosts,
     elements.plannedCatch,
   ].forEach((element) => {
@@ -822,6 +1304,7 @@ function wireInputs() {
 async function boot() {
   ensureMap();
   wireInputs();
+  syncDieselInput();
   await refreshConditions();
 }
 

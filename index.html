@@ -7,33 +7,28 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Spectral:wght@500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Merriweather:wght@400;700&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body class="landing-body">
     <div class="ocean-backdrop">
-      <div class="aurora aurora-one"></div>
-      <div class="aurora aurora-two"></div>
-      <div class="current current-one"></div>
-      <div class="current current-two"></div>
-      <div class="current current-three"></div>
-      <div class="wave-band wave-back"></div>
-      <div class="wave-band wave-mid"></div>
-      <div class="wave-band wave-front"></div>
-      <div class="tide-rings">
-        <span></span>
-        <span></span>
-        <span></span>
-      </div>
-      <div class="foam-grid"></div>
+      <div
+        class="rb-aurora-layer rb-aurora-layer-landing"
+        data-rb-aurora
+        data-color-stops="#0c5ce7,#8c6dff,#66c7ff"
+        data-speed="2.4"
+        data-blend="0.5"
+        data-amplitude="1.15"
+      ></div>
+      <div class="rb-aurora-vignette"></div>
     </div>
 
     <main class="landing-shell">
       <header class="landing-header">
         <div class="brand">
-          <span class="brand-mark">⚓</span>
+          <span class="brand-mark" aria-hidden="true"></span>
           <div>
             <p class="eyebrow">Pre-departure intelligence system</p>
             <h1>Harbour</h1>
@@ -48,117 +43,129 @@
       </header>
 
       <section class="landing-hero">
-        <div class="landing-copy">
-          <div class="hero-tags">
-            <span class="pill pill-blue">ocean-aware decision engine</span>
-            <span class="pill pill-green">live risk sectors</span>
-          </div>
-          <p class="hero-kicker">Before the boat leaves, Harbour reads the water like a warning system.</p>
-          <h2 class="landing-title">A marine intelligence system that shows when to go, when to hold, and why.</h2>
-          <p class="landing-summary">
-            Harbour combines live marine conditions, crew fatigue, and break-even pressure into one color-coded decision. It does not
-            just show forecasts. It shows whether the trip is still worth launching.
-          </p>
-          <div class="landing-actions">
-            <a class="primary-link" href="./app.html">Launch Live App</a>
-            <a class="ghost-link" href="#system">How it works</a>
-          </div>
-        </div>
+        <div class="landing-hero-frame reveal-block">
+          <div class="hero-ocean-surface" aria-hidden="true"></div>
+          <div class="hero-ocean-foam hero-ocean-foam-left" aria-hidden="true"></div>
+          <div class="hero-ocean-foam hero-ocean-foam-right" aria-hidden="true"></div>
 
-        <aside class="landing-panel">
-          <div class="panel-orbit orbit-one"></div>
-          <div class="panel-orbit orbit-two"></div>
-          <div class="signal-stack">
-            <div class="signal-card">
-              <span>Live marine sync</span>
+          <div class="hero-frame-top">
+            <div class="hero-frame-mark">
+              <span class="hero-frame-mark-main">H</span>
+              <span class="hero-frame-mark-degree">o</span>
+            </div>
+          </div>
+
+          <div class="hero-frame-center">
+            <p class="hero-kicker">Pre-departure marine intelligence for commercial fishers</p>
+            <h2 class="landing-title">Harbour</h2>
+            <p class="landing-summary">
+              Harbour maps live marine conditions, crew fatigue, and break-even pressure into one calm launch decision before the boat leaves shore.
+            </p>
+            <div class="landing-actions">
+              <a class="primary-link" href="./app.html">Open Live App</a>
+              <a class="ghost-link" href="#system">How it works</a>
+            </div>
+          </div>
+
+          <div class="hero-frame-side hero-frame-side-left" aria-hidden="true">01</div>
+          <div class="hero-frame-side hero-frame-side-right" aria-hidden="true">Launch</div>
+
+          <div class="hero-frame-bottom">
+            <div class="hero-preview-card hero-preview-card-wide">
+              <span class="eyebrow">System output</span>
+              <strong>Map the sea. Model the crew. Make the call.</strong>
+            </div>
+            <div class="hero-preview-card hero-preview-card-compact">
+              <span class="eyebrow">Live marine sync</span>
               <strong>Waves, wind, pressure</strong>
             </div>
-            <div class="signal-card">
-              <span>Crew state</span>
+            <div class="hero-preview-card hero-preview-card-compact">
+              <span class="eyebrow">Crew state</span>
               <strong>Sleep and days at sea</strong>
             </div>
-            <div class="signal-card">
-              <span>Trip pressure</span>
+            <div class="hero-preview-card hero-preview-card-compact">
+              <span class="eyebrow">Trip pressure</span>
               <strong>Fuel and break-even catch</strong>
             </div>
           </div>
-          <div class="landing-panel-core">
-            <span class="eyebrow">System output</span>
-            <strong>Map the sea.<br />Model the crew.<br />Make the call.</strong>
-            <p>Harbour is built to turn scattered marine signals into a calm, legible launch decision.</p>
-          </div>
-        </aside>
+        </div>
       </section>
 
-      <section class="landing-story" id="problem">
-        <article class="story-card">
+      <section class="landing-story section-divider reveal-group" id="problem">
+        <article class="story-card reveal-block">
           <span class="story-index">01</span>
           <h3>Weather alone is not enough</h3>
           <p>A safe-looking forecast can still become a bad launch when swell rises, pressure falls, or wind builds across the area.</p>
         </article>
-        <article class="story-card">
+        <article class="story-card reveal-block">
           <span class="story-index">02</span>
           <h3>Tired crews make worse calls</h3>
           <p>Sleep debt and days at sea change judgment. Harbour treats human readiness as part of the safety equation.</p>
         </article>
-        <article class="story-card">
+        <article class="story-card reveal-block">
           <span class="story-index">03</span>
           <h3>Economic pressure hides in the background</h3>
           <p>Fuel and catch targets quietly distort launch decisions. Harbour makes that pressure visible before it becomes dangerous.</p>
         </article>
       </section>
 
-      <section class="system-section" id="system">
-        <div class="section-heading">
+      <section class="system-section section-divider reveal-group" id="system">
+        <div class="section-heading reveal-block">
           <div>
             <p class="feature-kicker">What Harbour does</p>
-            <h2>One idea, shown clearly</h2>
+            <h2>One system. Three signals.</h2>
           </div>
         </div>
 
         <div class="system-grid">
-          <article class="system-card large">
+          <article class="system-card large reveal-block">
+            <span class="feature-icon feature-icon-grid" aria-hidden="true"></span>
             <h3>Live marine risk map</h3>
             <p>
               Harbour scans the launch area and colors nearby sectors green, amber, or red using live swell, wind, and pressure data.
             </p>
           </article>
-          <article class="system-card">
+          <article class="system-card reveal-block">
+            <span class="feature-icon feature-icon-crew" aria-hidden="true"></span>
             <h3>Fatigue-aware recommendation</h3>
             <p>Sleep and time-at-sea inputs shift the final call, so the same weather can produce a different recommendation.</p>
           </article>
-          <article class="system-card">
+          <article class="system-card reveal-block">
+            <span class="feature-icon feature-icon-economics" aria-hidden="true"></span>
             <h3>Break-even reality check</h3>
             <p>Trip economics are folded into the reasoning, exposing when financial pressure is pushing unsafe decisions.</p>
           </article>
         </div>
       </section>
 
-      <section class="flow-section" id="flow">
-        <div class="section-heading">
+      <section class="flow-section section-divider reveal-group" id="flow">
+        <div class="section-heading reveal-block">
           <div>
-            <p class="feature-kicker">How the page works</p>
-            <h2>From coastline to call</h2>
+            <p class="feature-kicker">How it works</p>
+            <h2>From departure point to decision</h2>
           </div>
         </div>
 
         <div class="flow-grid">
-          <article class="flow-card">
+          <article class="flow-card reveal-block">
+            <span class="feature-icon feature-icon-pin" aria-hidden="true"></span>
             <span class="story-index">01</span>
             <h3>Search a coast, city, or port</h3>
             <p>Choose a departure area anywhere in the world and Harbour centers the scan on that coastline.</p>
           </article>
-          <article class="flow-card">
+          <article class="flow-card reveal-block">
+            <span class="feature-icon feature-icon-patch" aria-hidden="true"></span>
             <span class="story-index">02</span>
             <h3>Read the color patches</h3>
             <p>The surrounding water is broken into larger regional areas and tinted by live conditions from that part of the sea.</p>
           </article>
-          <article class="flow-card">
+          <article class="flow-card reveal-block">
+            <span class="feature-icon feature-icon-route" aria-hidden="true"></span>
             <span class="story-index">03</span>
             <h3>Select the area you want</h3>
             <p>Click a patch to see distance, direction, wave profile, and the financial pressure for that specific fishing area.</p>
           </article>
-          <article class="flow-card wide">
+          <article class="flow-card wide reveal-block">
             <div class="flow-pulse">
               <span></span>
               <span></span>
@@ -170,8 +177,8 @@
         </div>
       </section>
 
-      <section class="cta-section">
-        <div class="cta-card">
+      <section class="cta-section section-divider reveal-group">
+        <div class="cta-card reveal-block">
           <p class="feature-kicker">Open the tool</p>
           <h2>Open the live interface</h2>
           <p>The tool page lets you scan an area, view sector colors, and see the actual go or no-go recommendation update in real time.</p>
@@ -179,5 +186,23 @@
         </div>
       </section>
     </main>
+    <script type="module" src="./aurora.js"></script>
+    <script>
+      const revealItems = document.querySelectorAll(".reveal-block");
+
+      const revealObserver = new IntersectionObserver(
+        entries => {
+          entries.forEach(entry => {
+            if (entry.isIntersecting) {
+              entry.target.classList.add("is-visible");
+              revealObserver.unobserve(entry.target);
+            }
+          });
+        },
+        { threshold: 0.14, rootMargin: "0px 0px -8% 0px" }
+      );
+
+      revealItems.forEach(item => revealObserver.observe(item));
+    </script>
   </body>
 </html>
