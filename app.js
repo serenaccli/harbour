@@ -11,6 +11,7 @@ const PATCH_STEPS = 72;
 const DEFAULT_DIESEL_PRICE = 2.05;
 const ROUTE_COLUMNS = 7;
 const ROUTE_ROWS = 5;
+const FORECAST_HOURS = 24;
 
 const FISH_SPECIES = {
   tuna: { label: "Tuna", salePrice: 9.8 },
@@ -61,8 +62,12 @@ const appState = {
   target: { ...DEFAULT_DEPARTURE, label: "Selected patch" },
   targetSample: null,
   routeSamples: [],
+  routeForecasts: [],
+  targetForecasts: [],
   routePath: [],
   greenRoutePath: [],
+  forecastHourIndex: 0,
+  optimalForecast: null,
   recommendation: null,
   dieselPrice: DIESEL_BY_COUNTRY.AU,
   map: null,
@@ -105,6 +110,9 @@ const elements = {
   missionBand: document.getElementById("missionBand"),
   missionSummary: document.getElementById("missionSummary"),
   coordinateReadout: document.getElementById("coordinateReadout"),
+  routeTimeSlider: document.getElementById("routeTimeSlider"),
+  routeTimeLabel: document.getElementById("routeTimeLabel"),
+  optimalWindow: document.getElementById("optimalWindow"),
 };
 
 function formatNumber(value, digits = 1) {
@@ -125,6 +133,23 @@ function formatCoordinate(value, positiveLabel, negativeLabel) {
 
 function formatLatLng(lat, lng) {
   return `${formatCoordinate(lat, "N", "S")} · ${formatCoordinate(lng, "E", "W")}`;
+}
+
+function formatForecastTime(value) {
+  if (!value) {
+    return "--";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value.replace("T", " ");
+  }
+
+  return date.toLocaleString([], {
+    weekday: "short",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
 function getRiskBand(score) {
@@ -340,6 +365,84 @@ async function fetchMarineSamplesForPoints(points) {
       band: getRiskBand(weatherScore),
     };
   });
+}
+
+function readHourlyValue(block, field, index) {
+  const values = block?.hourly?.[field];
+  return Array.isArray(values) ? values[index] : undefined;
+}
+
+function buildForecastSample(point, weatherBlock, marineBlock, hourIndex, time) {
+  const waveHeight = readHourlyValue(marineBlock, "wave_height", hourIndex);
+  const swellHeight = readHourlyValue(marineBlock, "swell_wave_height", hourIndex);
+  const windSpeed = readHourlyValue(weatherBlock, "wind_speed_10m", hourIndex);
+  const gusts = readHourlyValue(weatherBlock, "wind_gusts_10m", hourIndex);
+  const pressure = readHourlyValue(weatherBlock, "pressure_msl", hourIndex);
+  const weatherScore = scoreWeather({
+    waveHeight,
+    swellHeight,
+    windSpeed,
+    gusts,
+    pressure,
+  });
+
+  return {
+    ...point,
+    forecastTime: time,
+    waveHeight,
+    swellHeight,
+    windSpeed,
+    gusts,
+    pressure,
+    seaTemperature: readHourlyValue(marineBlock, "sea_surface_temperature", hourIndex),
+    swellDirection: readHourlyValue(marineBlock, "swell_wave_direction", hourIndex),
+    weatherScore,
+    band: getRiskBand(weatherScore),
+  };
+}
+
+async function fetchMarineForecastsForPoints(points) {
+  if (!points.length) {
+    return [];
+  }
+
+  const latitudes = points.map((point) => point.lat.toFixed(4)).join(",");
+  const longitudes = points.map((point) => point.lng.toFixed(4)).join(",");
+
+  const weatherUrl =
+    `https://api.open-meteo.com/v1/forecast?latitude=${latitudes}&longitude=${longitudes}` +
+    "&hourly=wind_speed_10m,wind_gusts_10m,pressure_msl&forecast_hours=24&timezone=auto";
+  const marineUrl =
+    `https://marine-api.open-meteo.com/v1/marine?latitude=${latitudes}&longitude=${longitudes}` +
+    "&hourly=wave_height,swell_wave_height,swell_wave_direction,sea_surface_temperature&forecast_hours=24&timezone=auto";
+
+  const [weatherResponse, marineResponse] = await Promise.all([fetch(weatherUrl), fetch(marineUrl)]);
+  if (!weatherResponse.ok || !marineResponse.ok) {
+    throw new Error("24hr route forecast failed.");
+  }
+
+  const weatherData = await weatherResponse.json();
+  const marineData = await marineResponse.json();
+  const weatherBlocks = Array.isArray(weatherData) ? weatherData : [weatherData];
+  const marineBlocks = Array.isArray(marineData) ? marineData : [marineData];
+  const times = weatherBlocks[0]?.hourly?.time || marineBlocks[0]?.hourly?.time || [];
+  const hourCount = Math.min(FORECAST_HOURS, times.length);
+
+  return Array.from({ length: hourCount }, (_, hourIndex) => ({
+    time: times[hourIndex],
+    samples: points.map((point, index) => buildForecastSample(point, weatherBlocks[index], marineBlocks[index], hourIndex, times[hourIndex])),
+  }));
+}
+
+async function fetchMarineForecastForPoint(point) {
+  const forecasts = await fetchMarineForecastsForPoints([point]);
+  return forecasts.map((forecast) => ({
+    time: forecast.time,
+    sample: {
+      ...forecast.samples[0],
+      label: point.label || "Selected patch",
+    },
+  }));
 }
 
 async function fetchMarineSample(point) {
@@ -669,6 +772,89 @@ function computeGreenRoutePath(points) {
   });
 }
 
+function averageWeatherScore(samples) {
+  const scores = samples.map((sample) => sample.weatherScore).filter(Number.isFinite);
+  if (!scores.length) {
+    return Infinity;
+  }
+  return scores.reduce((total, score) => total + score, 0) / scores.length;
+}
+
+function findOptimalForecast(routeForecasts, targetForecasts) {
+  return routeForecasts.reduce((best, routeForecast, index) => {
+    const targetScore = targetForecasts[index]?.sample?.weatherScore ?? 0;
+    const score = averageWeatherScore(routeForecast.samples) * 0.74 + targetScore * 0.26;
+    if (!best || score < best.score) {
+      return {
+        index,
+        time: routeForecast.time,
+        score,
+        band: getRiskBand(Math.round(score)),
+      };
+    }
+    return best;
+  }, null);
+}
+
+function renderForecastControls() {
+  const forecast = appState.routeForecasts[appState.forecastHourIndex];
+  const optimal = appState.optimalForecast;
+
+  if (elements.routeTimeSlider) {
+    const max = Math.max(0, appState.routeForecasts.length - 1);
+    elements.routeTimeSlider.max = String(max);
+    elements.routeTimeSlider.value = String(Math.min(appState.forecastHourIndex, max));
+    elements.routeTimeSlider.disabled = !appState.routeForecasts.length;
+  }
+
+  if (elements.routeTimeLabel) {
+    elements.routeTimeLabel.textContent = forecast
+      ? `${formatForecastTime(forecast.time)} · +${appState.forecastHourIndex}h`
+      : "Loading 24hr route...";
+  }
+
+  if (!elements.optimalWindow) {
+    return;
+  }
+
+  if (!optimal) {
+    elements.optimalWindow.innerHTML = `
+      <span>Waiting for live route forecast.</span>
+      <strong>--</strong>
+      <p>Slide the route forecast hour to compare how the safer corridor changes color through the next day.</p>
+    `;
+    return;
+  }
+
+  const isSelected = optimal.index === appState.forecastHourIndex;
+  elements.optimalWindow.innerHTML = `
+    <span>${isSelected ? "Viewing the best window" : "Lowest combined route risk"}</span>
+    <strong>${formatForecastTime(optimal.time)}</strong>
+    <p>${getBandLabel(optimal.band).toUpperCase()} · ${Math.round(optimal.score)}/100 average route pressure across the mapped corridor.</p>
+  `;
+}
+
+function applyForecastHour(index) {
+  if (!appState.routeForecasts.length || !appState.targetForecasts.length) {
+    renderForecastControls();
+    return;
+  }
+
+  const boundedIndex = Math.max(0, Math.min(index, appState.routeForecasts.length - 1));
+  const routeForecast = appState.routeForecasts[boundedIndex];
+  const targetForecast = appState.targetForecasts[boundedIndex] || appState.targetForecasts[0];
+
+  appState.forecastHourIndex = boundedIndex;
+  appState.targetSample = targetForecast.sample;
+  appState.routeSamples = routeForecast.samples;
+  appState.routePath = computeRoutePath(appState.routeSamples);
+  appState.greenRoutePath = computeGreenRoutePath(appState.routeSamples);
+
+  renderMap();
+  buildRecommendation();
+  renderForecastControls();
+}
+
 function circleCoordinates(center, radiusKm = PATCH_RADIUS_KM, steps = PATCH_STEPS) {
   const earthRadiusKm = 6371;
   const latRadians = toRadians(center.lat);
@@ -813,6 +999,7 @@ function renderRecommendation() {
 
   elements.selectedAreaMetrics.innerHTML = [
     metricCard("Patch center", sample.label),
+    metricCard("Forecast hour", formatForecastTime(sample.forecastTime)),
     metricCard("Patch radius", `${PATCH_RADIUS_KM} km`),
     metricCard("Travel distance", `${formatNumber(distanceKm, 1)} km`),
     metricCard("Safer route hops", `${Math.max(0, appState.routePath.length - 1)}`),
@@ -1123,6 +1310,7 @@ async function updateTargetFromMap(lng, lat, label = "Selected patch") {
     lng,
     label,
   };
+  appState.forecastHourIndex = 0;
   await refreshConditions(true);
 }
 
@@ -1131,29 +1319,33 @@ async function refreshConditions(keepView = false) {
     setStatus(`Syncing live conditions for ${appState.target.label}...`);
     setMissionState("SYNCING", `Evaluating a ${PATCH_RADIUS_KM} km circular patch around the current pin.`);
 
-    const [targetSample, routeSamples] = await Promise.all([
-      fetchMarineSample(appState.target),
-      fetchMarineSamplesForPoints(buildRouteGrid(appState.departure, appState.target)),
+    const routeGrid = buildRouteGrid(appState.departure, appState.target);
+    const [targetForecasts, routeForecasts] = await Promise.all([
+      fetchMarineForecastForPoint(appState.target),
+      fetchMarineForecastsForPoints(routeGrid),
     ]);
 
-    appState.targetSample = targetSample;
-    appState.routeSamples = routeSamples;
-    appState.routePath = computeRoutePath(routeSamples);
-    appState.greenRoutePath = computeGreenRoutePath(routeSamples);
+    if (!targetForecasts.length || !routeForecasts.length) {
+      throw new Error("24hr route forecast is unavailable for this patch.");
+    }
+
+    appState.targetForecasts = targetForecasts;
+    appState.routeForecasts = routeForecasts;
+    appState.optimalForecast = findOptimalForecast(routeForecasts, targetForecasts);
+    appState.forecastHourIndex = Math.min(appState.forecastHourIndex, routeForecasts.length - 1);
+    applyForecastHour(appState.forecastHourIndex);
+
     appState.target = {
       lat: appState.targetSample.lat,
       lng: appState.targetSample.lng,
       label: appState.targetSample.label,
     };
 
-    renderMap();
-    buildRecommendation();
-
     const routeMessage = appState.greenRoutePath.length > 1
       ? "Harbour found both a best-available route and an alternate all-green route."
       : "Harbour mapped the best available safer connection route, but no fully green corridor was found.";
 
-    setStatus(`Live conditions synced for the selected patch. ${routeMessage}`, "success");
+    setStatus(`24hr route forecast synced for the selected patch. ${routeMessage}`, "success");
 
     if (!keepView && appState.mapLoaded) {
       appState.map.flyTo({
@@ -1184,8 +1376,12 @@ async function searchLocation() {
     appState.dieselPrice = getDieselPriceForDeparture(departure);
     syncDieselInput();
     appState.routeSamples = [];
+    appState.routeForecasts = [];
+    appState.targetForecasts = [];
     appState.routePath = [];
     appState.greenRoutePath = [];
+    appState.forecastHourIndex = 0;
+    appState.optimalForecast = null;
     appState.target = {
       lat: departure.lat,
       lng: departure.lng,
@@ -1219,8 +1415,12 @@ function useCurrentLocation() {
       appState.dieselPrice = DEFAULT_DIESEL_PRICE;
       syncDieselInput();
       appState.routeSamples = [];
+      appState.routeForecasts = [];
+      appState.targetForecasts = [];
       appState.routePath = [];
       appState.greenRoutePath = [];
+      appState.forecastHourIndex = 0;
+      appState.optimalForecast = null;
       appState.target = {
         lat: position.coords.latitude,
         lng: position.coords.longitude,
@@ -1277,6 +1477,9 @@ function wireInputs() {
   elements.useLocationBtn.addEventListener("click", useCurrentLocation);
   elements.refreshBtn.addEventListener("click", () => refreshConditions());
   elements.overrideBtn.addEventListener("click", handleOverride);
+  elements.routeTimeSlider.addEventListener("input", (event) => {
+    applyForecastHour(Number(event.target.value) || 0);
+  });
 
   elements.locationInput.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
@@ -1305,6 +1508,7 @@ async function boot() {
   ensureMap();
   wireInputs();
   syncDieselInput();
+  renderForecastControls();
   await refreshConditions();
 }
 

@@ -88,6 +88,18 @@
                 </div>
               </div>
 
+              <div class="time-route-panel">
+                <div>
+                  <span class="metric-label">Route forecast hour</span>
+                  <strong id="routeTimeLabel">Loading 24hr route...</strong>
+                </div>
+                <input id="routeTimeSlider" type="range" min="0" max="23" step="1" value="0" />
+                <div class="time-route-footer">
+                  <span>Now</span>
+                  <span>+24h</span>
+                </div>
+              </div>
+
               <div id="statusBanner" class="status-banner">Waiting for live data.</div>
 
               <div id="map" class="marine-map"></div>
@@ -124,6 +136,18 @@
         </section>
 
         <section class="insight-grid">
+          <article class="panel optimal-panel">
+            <div class="section-heading small">
+              <p class="feature-kicker">24hr route forecast</p>
+              <h2>Most optimal 24hr period</h2>
+            </div>
+            <div class="optimal-window" id="optimalWindow">
+              <span>Waiting for live route forecast.</span>
+              <strong>--</strong>
+              <p>Slide the route forecast hour to compare how the safer corridor changes color through the next day.</p>
+            </div>
+          </article>
+
           <article class="panel">
             <div class="section-heading small">
               <p class="feature-kicker">Reasoning</p>
@@ -239,6 +263,6 @@ Harbour office - VHF channel 16</textarea>
 
     <script src="https://unpkg.com/maplibre-gl@5.18.0/dist/maplibre-gl.js"></script>
     <script type="module" src="./aurora.js"></script>
-    <script src="./app.js?v=marker-sync-fix"></script>
+    <script src="./app.js?v=forecast-route-24"></script>
   </body>
 </html>
