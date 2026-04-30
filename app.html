@@ -21,11 +21,6 @@
       <div class="app-ocean-backdrop">
         <div
           class="rb-aurora-layer rb-aurora-layer-app"
-          data-rb-aurora
-          data-color-stops="#0c5ce7,#8c6dff,#66c7ff"
-          data-speed="2.4"
-          data-blend="0.5"
-          data-amplitude="1.15"
         ></div>
         <div class="rb-aurora-vignette rb-aurora-vignette-app"></div>
       </div>
@@ -52,7 +47,7 @@
               <span class="eyebrow">Current engine status</span>
               <strong id="missionBand">SYNCING</strong>
             </div>
-            <p id="missionSummary">Pulling live marine conditions for the current selected patch.</p>
+            <p id="missionSummary" aria-live="polite">Pulling live marine conditions for the current selected patch.</p>
             <div class="global-badge">
               <span>Patch center</span>
               <strong id="coordinateReadout">Locating...</strong>
@@ -93,16 +88,16 @@
                   <span class="metric-label">Route forecast hour</span>
                   <strong id="routeTimeLabel">Loading 24hr route...</strong>
                 </div>
-                <input id="routeTimeSlider" type="range" min="0" max="23" step="1" value="0" />
+                <input id="routeTimeSlider" type="range" min="0" max="23" step="1" value="0" aria-label="Select route forecast hour" aria-describedby="routeTimeLabel" />
                 <div class="time-route-footer">
                   <span>Now</span>
                   <span>+24h</span>
                 </div>
               </div>
 
-              <div id="statusBanner" class="status-banner">Waiting for live data.</div>
+              <div id="statusBanner" class="status-banner" role="status" aria-live="polite">Waiting for live data.</div>
 
-              <div id="map" class="marine-map"></div>
+              <div id="map" class="marine-map" role="application" aria-label="Interactive marine risk map"></div>
             </section>
 
             <aside class="panel decision-panel" id="decisionPanel">
@@ -262,7 +257,6 @@ Harbour office - VHF channel 16</textarea>
     </div>
 
     <script src="https://unpkg.com/maplibre-gl@5.18.0/dist/maplibre-gl.js"></script>
-    <script type="module" src="./aurora.js"></script>
     <script src="./app.js?v=forecast-route-24"></script>
   </body>
 </html>

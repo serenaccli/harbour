@@ -805,6 +805,7 @@ function renderForecastControls() {
     elements.routeTimeSlider.max = String(max);
     elements.routeTimeSlider.value = String(Math.min(appState.forecastHourIndex, max));
     elements.routeTimeSlider.disabled = !appState.routeForecasts.length;
+    elements.routeTimeSlider.setAttribute("aria-valuetext", forecast ? formatForecastTime(forecast.time) : "Route forecast loading");
   }
 
   if (elements.routeTimeLabel) {
