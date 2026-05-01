@@ -395,18 +395,18 @@ button:hover,
 .landing-hero-frame {
   position: relative;
   min-height: 78vh;
-  padding: 28px;
-  border-radius: 0;
+  padding: 30px;
+  border-radius: 28px;
   background:
     linear-gradient(135deg, rgba(6, 27, 90, 0.52), rgba(36, 12, 88, 0.76)),
     radial-gradient(circle at 18% 20%, rgba(95, 219, 255, 0.4), transparent 30%),
     radial-gradient(circle at 72% 28%, rgba(159, 104, 255, 0.52), transparent 34%),
     radial-gradient(circle at 54% 72%, rgba(37, 99, 255, 0.34), transparent 34%),
     #09123a;
-  border: 1px solid rgba(191, 207, 255, 0.9);
+  border: 1px solid rgba(191, 207, 255, 0.42);
   box-shadow:
-    0 28px 70px rgba(4, 9, 12, 0.28),
-    inset 0 0 0 1px rgba(245, 250, 252, 0.08);
+    0 28px 70px rgba(4, 9, 12, 0.22),
+    inset 0 1px 0 rgba(245, 250, 252, 0.08);
   overflow: hidden;
 }
 
@@ -421,10 +421,10 @@ button:hover,
   z-index: 1;
   pointer-events: none;
   background:
-    linear-gradient(rgba(245, 250, 252, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(245, 250, 252, 0.025) 1px, transparent 1px);
+    linear-gradient(rgba(245, 250, 252, 0.022) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(245, 250, 252, 0.016) 1px, transparent 1px);
   background-size: 4px 4px;
-  opacity: 0.55;
+  opacity: 0.42;
 }
 
 .hero-ocean-surface {
@@ -436,7 +436,7 @@ button:hover,
     radial-gradient(circle at 78% 16%, rgba(162, 98, 255, 0.42), transparent 24%),
     radial-gradient(circle at 72% 62%, rgba(25, 8, 67, 0.64), transparent 28%),
     linear-gradient(160deg, rgba(28, 106, 210, 0.78), rgba(21, 50, 150, 0.86) 30%, rgba(30, 16, 96, 0.94) 58%, rgba(2, 5, 22, 0.98) 100%);
-  filter: saturate(1.2) contrast(1.08);
+  filter: saturate(1.14) contrast(1.02);
   background-size: 130% 130%, 150% 150%, 120% 120%, 140% 140%, 100% 100%;
   animation: none;
 }
@@ -445,7 +445,7 @@ button:hover,
   content: "";
   position: absolute;
   inset: 0;
-  opacity: 0.34;
+  opacity: 0.22;
   background:
     repeating-radial-gradient(circle at 18% 24%, rgba(245, 250, 252, 0.12) 0 1px, transparent 1px 14px),
     repeating-linear-gradient(132deg, rgba(245, 250, 252, 0.06) 0 2px, transparent 2px 26px);
@@ -591,11 +591,12 @@ button:hover,
   z-index: 1;
   padding: 18px 18px 20px;
   background:
-    linear-gradient(135deg, rgba(40, 128, 255, 0.28), rgba(133, 76, 255, 0.26)),
-    rgba(13, 32, 92, 0.58);
-  border: 1px solid rgba(196, 210, 255, 0.44);
-  border-radius: 0;
+    linear-gradient(135deg, rgba(65, 151, 255, 0.2), rgba(149, 96, 255, 0.18)),
+    rgba(13, 32, 92, 0.46);
+  border: 1px solid rgba(210, 222, 255, 0.24);
+  border-radius: 18px;
   backdrop-filter: none;
+  box-shadow: 0 16px 28px rgba(3, 9, 32, 0.14);
 }
 
 .hero-preview-card-wide {
